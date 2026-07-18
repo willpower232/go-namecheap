@@ -12,7 +12,7 @@ const (
 )
 
 type DomainSRVGetRecordsResult struct {
-	Result []DomainSRVRecord `xml:"Result"`
+	Records []DomainSRVRecord `xml:"Records"`
 }
 
 type DomainSRVRecord struct {
