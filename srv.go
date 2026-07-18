@@ -68,11 +68,9 @@ func (client *Client) DomainSRVSetRecords(
 		requestInfo.params.Set(fmt.Sprintf("Weight%v", i+1), strconv.Itoa(r.Weight))
 	}
 
-	// unfortunately namecheap uses the same output xml for sets and gets of SRV
-	// which means we can't tell the difference during unmarshaling
-	_, err := client.do(requestInfo)
+	resp, err := client.doSRV(requestInfo)
 	if err != nil {
 		return nil, err
 	}
-	return nil, nil
+	return resp.DomainSRVSetRecords, nil
 }
