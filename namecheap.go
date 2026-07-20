@@ -40,28 +40,39 @@ type ApiRequest struct {
 }
 
 type ApiResponse struct {
-	Status             string                    `xml:"Status,attr"`
-	Command            string                    `xml:"RequestedCommand"`
-	TLDList            []TLDListResult           `xml:"CommandResponse>Tlds>Tld"`
-	Domains            []DomainGetListResult     `xml:"CommandResponse>DomainGetListResult>Domain"`
-	DomainInfo         *DomainInfo               `xml:"CommandResponse>DomainGetInfoResult"`
-	DomainDNSHosts     *DomainDNSGetHostsResult  `xml:"CommandResponse>DomainDNSGetHostsResult"`
-	DomainDNSSetHosts  *DomainDNSSetHostsResult  `xml:"CommandResponse>DomainDNSSetHostsResult"`
-	DomainCreate       *DomainCreateResult       `xml:"CommandResponse>DomainCreateResult"`
-	DomainRenew        *DomainRenewResult        `xml:"CommandResponse>DomainRenewResult"`
-	DomainsCheck       []DomainCheckResult       `xml:"CommandResponse>DomainCheckResult"`
-	DomainNSInfo       *DomainNSInfoResult       `xml:"CommandResponse>DomainNSInfoResult"`
-	DomainDNSSetCustom *DomainDNSSetCustomResult `xml:"CommandResponse>DomainDNSSetCustomResult"`
-	DomainSetContacts  *DomainSetContactsResult  `xml:"CommandResponse>DomainSetContactResult"`
-	SslActivate        *SslActivateResult        `xml:"CommandResponse>SSLActivateResult"`
-	SslCreate          *SslCreateResult          `xml:"CommandResponse>SSLCreateResult"`
-	SslCertificates    []SslGetListResult        `xml:"CommandResponse>SSLListResult>SSL"`
-	UsersGetPricing    []UsersGetPricingResult   `xml:"CommandResponse>UserGetPricingResult>ProductType"`
-	WhoisguardList     []WhoisguardGetListResult `xml:"CommandResponse>WhoisguardGetListResult>Whoisguard"`
-	WhoisguardEnable   whoisguardEnableResult    `xml:"CommandResponse>WhoisguardEnableResult"`
-	WhoisguardDisable  whoisguardDisableResult   `xml:"CommandResponse>WhoisguardDisableResult"`
-	WhoisguardRenew    *WhoisguardRenewResult    `xml:"CommandResponse>WhoisguardRenewResult"`
-	Errors             ApiErrors                 `xml:"Errors>Error"`
+	Status             string                     `xml:"Status,attr"`
+	Command            string                     `xml:"RequestedCommand"`
+	TLDList            []TLDListResult            `xml:"CommandResponse>Tlds>Tld"`
+	Domains            []DomainGetListResult      `xml:"CommandResponse>DomainGetListResult>Domain"`
+	DomainInfo         *DomainInfo                `xml:"CommandResponse>DomainGetInfoResult"`
+	DomainDNSHosts     *DomainDNSGetHostsResult   `xml:"CommandResponse>DomainDNSGetHostsResult"`
+	DomainDNSSetHosts  *DomainDNSSetHostsResult   `xml:"CommandResponse>DomainDNSSetHostsResult"`
+	DomainSRVRecords   *DomainSRVGetRecordsResult `xml:"CommandResponse>Result"`
+	DomainCreate       *DomainCreateResult        `xml:"CommandResponse>DomainCreateResult"`
+	DomainRenew        *DomainRenewResult         `xml:"CommandResponse>DomainRenewResult"`
+	DomainsCheck       []DomainCheckResult        `xml:"CommandResponse>DomainCheckResult"`
+	DomainNSInfo       *DomainNSInfoResult        `xml:"CommandResponse>DomainNSInfoResult"`
+	DomainDNSSetCustom *DomainDNSSetCustomResult  `xml:"CommandResponse>DomainDNSSetCustomResult"`
+	DomainSetContacts  *DomainSetContactsResult   `xml:"CommandResponse>DomainSetContactResult"`
+	SslActivate        *SslActivateResult         `xml:"CommandResponse>SSLActivateResult"`
+	SslCreate          *SslCreateResult           `xml:"CommandResponse>SSLCreateResult"`
+	SslCertificates    []SslGetListResult         `xml:"CommandResponse>SSLListResult>SSL"`
+	UsersGetPricing    []UsersGetPricingResult    `xml:"CommandResponse>UserGetPricingResult>ProductType"`
+	WhoisguardList     []WhoisguardGetListResult  `xml:"CommandResponse>WhoisguardGetListResult>Whoisguard"`
+	WhoisguardEnable   whoisguardEnableResult     `xml:"CommandResponse>WhoisguardEnableResult"`
+	WhoisguardDisable  whoisguardDisableResult    `xml:"CommandResponse>WhoisguardDisableResult"`
+	WhoisguardRenew    *WhoisguardRenewResult     `xml:"CommandResponse>WhoisguardRenewResult"`
+	Errors             ApiErrors                  `xml:"Errors>Error"`
+}
+
+// for whatever reason, namecheap uses the same XML for setting and getting SRVs
+// in order to preserve separate DomainSRVGetRecordsResult and DomainSRVSetRecordsResult
+// we need a second ApiResponse struct and do method
+type ApiResponseSRV struct {
+	Status              string                     `xml:"Status,attr"`
+	Command             string                     `xml:"RequestedCommand"`
+	DomainSRVSetRecords *DomainSRVSetRecordsResult `xml:"CommandResponse>Result"`
+	Errors              ApiErrors                  `xml:"Errors>Error"`
 }
 
 // ApiError is the format of the error returned in the api responses.
@@ -125,6 +136,37 @@ func (client *Client) do(request *ApiRequest) (*ApiResponse, error) {
 	}
 
 	resp := new(ApiResponse)
+	if err = xml.Unmarshal(body, resp); err != nil {
+		return nil, err
+	}
+
+	if resp.Status == "" {
+		return nil, errors.New("failed to parse xml from api")
+	}
+	if resp.Status == "ERROR" {
+		return nil, resp.Errors
+	}
+
+	return resp, nil
+}
+
+// for whatever reason, namecheap uses the same XML for setting and getting SRVs
+// in order to preserve separate DomainSRVGetRecordsResult and DomainSRVSetRecordsResult
+// we need a second ApiResponse struct and do method
+func (client *Client) doSRV(request *ApiRequest) (*ApiResponseSRV, error) {
+	if request.method == "" {
+		return nil, errors.New("request method cannot be blank")
+	}
+
+	body, status, err := client.sendRequest(request)
+	if err != nil {
+		return nil, err
+	}
+	if status != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code from api: %d", status)
+	}
+
+	resp := new(ApiResponseSRV)
 	if err = xml.Unmarshal(body, resp); err != nil {
 		return nil, err
 	}
